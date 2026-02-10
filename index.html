@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Questism - Hành Trình Thống Nhất Gangbuk</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="game-header">
+            <h1 class="game-title">⚔️ QUESTISM ⚔️</h1>
+            <p class="game-subtitle">Hành Trình Thống Nhất Gangbuk</p>
+        </div>
+
+        <!-- Progress Section -->
+        <div class="progress-section">
+            <div class="progress-info">
+                <span>🎯 Arc <span id="currentArc">1</span>/3</span>
+                <span>📋 Nhiệm vụ: <span id="questProgress">0</span>/500</span>
+                <span>💰 Điểm: <span id="totalPoints">0</span></span>
+            </div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+        </div>
+
+        <!-- Quest Tracker -->
+        <div class="quest-tracker">
+            <div class="quest-tracker-title">
+                📌 QUEST TRACKER - Nhiệm vụ khả dụng
+            </div>
+            <div id="questTrackerList"></div>
+        </div>
+
+        <!-- Main Grid -->
+        <div class="main-grid">
+            <!-- Character Panel -->
+            <div class="panel character-panel">
+                <h2 class="panel-title">👤 Nhân Vật</h2>
+                <div class="character-info">
+                    <div class="character-name" id="characterName">MC (Bạn)</div>
+                    <div class="breakthrough-badge" id="breakthroughLevel">None</div>
+                </div>
+                
+                <div class="hp-bar">
+                    <div class="hp-fill" id="hpBar">
+                        <span id="hpText">100/100</span>
+                    </div>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-row">
+                        <span class="stat-name">💪 Sức mạnh</span>
+                        <span class="stat-value" id="statStr">F</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-name">⚡ Tốc độ</span>
+                        <span class="stat-value" id="statSpd">F</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-name">🛡️ Chịu đòn</span>
+                        <span class="stat-value" id="statDur">F</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-name">🔮 Tiềm năng</span>
+                        <span class="stat-value" id="statPot">F</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-name">🧠 Trí tuệ</span>
+                        <span class="stat-value" id="statInt">F</span>
+                    </div>
+                </div>
+
+                <div class="special-status">
+                    <div class="status-item danger">
+                        ⚠️ Đột phá ép buộc: <span id="forcedBreak">Không</span>
+                    </div>
+                    <div class="status-item success">
+                        ✨ Exclusive Skill: <span id="exclusiveSkill">Chưa có</span>
+                    </div>
+                </div>
+
+                <div class="crew-section">
+                    <h3 class="section-title">👥 Crew (<span id="crewCount">0</span>)</h3>
+                    <div id="crewList" class="crew-grid"></div>
+                </div>
+            </div>
+
+            <!-- Quest List -->
+            <div class="panel quest-list-panel">
+                <h2 class="panel-title">📜 Danh Sách Nhiệm Vụ</h2>
+                <div class="quest-filter">
+                    <button class="filter-btn active" onclick="filterQuests('all')">Tất cả</button>
+                    <button class="filter-btn" onclick="filterQuests('main')">Chính</button>
+                    <button class="filter-btn" onclick="filterQuests('side')">Phụ</button>
+                </div>
+                <div id="questList" class="quest-scroll"></div>
+            </div>
+
+            <!-- Inventory -->
+            <div class="panel inventory-panel" id="inventoryPanel">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <h2 class="panel-title">🎴 Kho Đồ (<span id="cardCount">0</span>)</h2>
+                    <button class="btn btn-info" onclick="toggleShop()" style="padding: 5px 10px; font-size: 0.9em;">🏪 Cửa Hàng</button>
+                </div>
+                <div class="card-filter">
+                    <select id="cardTypeFilter" onchange="filterInventory()">
+                        <option value="all">Tất cả</option>
+                        <option value="stat">Thẻ Chỉ số</option>
+                        <option value="skill">Thẻ Kỹ năng</option>
+                        <option value="support">Thẻ Hỗ trợ</option>
+                        <option value="cultivation">Thẻ Bồi dưỡng</option>
+                        <option value="special">Thẻ Đặc biệt</option>
+                    </select>
+                </div>
+                <div id="inventoryList" class="inventory-scroll"></div>
+            </div>
+
+            <!-- Shop Panel (Hidden by default) -->
+            <div class="panel inventory-panel" id="shopPanel" style="display: none;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <h2 class="panel-title">🏪 Cửa Hàng</h2>
+                    <button class="btn btn-info" onclick="toggleShop()" style="padding: 5px 10px; font-size: 0.9em;">🎴 Kho Đồ</button>
+                </div>
+                <div class="card-filter">
+                    <select id="shopTypeFilter" onchange="filterShop()">
+                        <option value="all">Tất cả</option>
+                        <option value="stat">Thẻ Chỉ số</option>
+                        <option value="skill">Thẻ Kỹ năng</option>
+                        <option value="support">Thẻ Hỗ trợ</option>
+                        <option value="cultivation">Thẻ Bồi dưỡng</option>
+                    </select>
+                </div>
+                <div id="shopList" class="inventory-scroll"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Battle Screen -->
+    <div class="battle-screen" id="battleScreen">
+        <div class="battle-container">
+            <div class="battle-title">Battle Title</div>
+
+            <div class="battle-body">
+            <table class="battle-table">
+                <tbody>
+                    <tr>
+                        <td class="battle-header-cell">
+                            <div class="header-left">
+                                <div>MC</div>
+                                <div>(Stat)</div>
+                                <div>(HP Bar)</div>
+                            </div>
+                        </td>
+                        <td class="battle-header-cell">
+                            <div class="header-right">
+                                <div>Boss name (If Boss Quest)</div>
+                                <div>(Stat)</div>
+                                <div>(HP Bar)</div>
+                            </div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="left-column">
+                            <div class="crew-member">
+                                <div>Crew member 1</div>
+                                <div>(Stat)</div>
+                                <div>(HP Bar)</div>
+                            </div>
+                            <div class="crew-member">
+                                <div>Crew member 2</div>
+                                <div>(Stat)</div>
+                                <div>(HP Bar)</div>
+                            </div>
+                            <div class="crew-member">
+                                <div>Crew member 3</div>
+                                <div>(Stat)</div>
+                                <div>(HP Bar)</div>
+                            </div>
+                        </td>
+                        <td class="right-column">
+                            <div class="minion">
+                                <div>Minion 1 HP</div>
+                                <div>(Stat)</div>
+                                <div>(HP Bar)</div>
+                            </div>
+                            <div class="minion">
+                                <div>Minion 2 HP</div>
+                                <div>(Stat)</div>
+                                <div>(HP Bar)</div>
+                            </div>
+                            <div class="minion">
+                                <div>Minion 3 HP</div>
+                                <div>(Stat)</div>
+                                <div>(HP Bar)</div>
+                            </div>
+                            <div class="minion">
+                                <div>Minion 4 HP</div>
+                                <div>(Stat)</div>
+                                <div>(HP Bar)</div>
+                            </div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="battle-section">
+                <div class="section-title">Battle Log</div>
+                <div class="section-content" id="battleLog"></div>
+            </div>
+
+            </div> <!-- .battle-body -->
+
+            <div class="battle-section battle-actions" id="battleActionsWrapper">
+                <div class="section-title">Battle Actions</div>
+                <div class="section-content" id="battleActions">
+                    <button class="btn btn-danger" onclick="closeBattle()">Đóng</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Breakthrough Overlay -->
+    <div class="breakthrough-overlay" id="breakthroughOverlay">
+        <div class="breakthrough-content">
+            <div class="breakthrough-text">🌟 ĐỘT PHÁ GIỚI HẠN! 🌟</div>
+            <div class="breakthrough-subtext" id="breakthroughType"></div>
+        </div>
+    </div>
+
+    <!-- Modal -->
+    <div class="modal" id="modal">
+        <div class="modal-content">
+            <span class="close-modal" onclick="closeModal()">&times;</span>
+            <h2 class="modal-title" id="modalTitle"></h2>
+            <div class="modal-body" id="modalBody"></div>
+        </div>
+    </div>
+
+    <!-- Victory Modal Overlay -->
+    <div class="victory-overlay" id="victoryOverlay">
+        <div class="victory-modal">
+            <div class="victory-header">
+                <div class="victory-title"> CHIẾN THẮNG </div>
+            </div>
+            <div class="victory-content">
+                <div class="victory-message" id="victoryMessage">
+                    Bạn đã hoàn thành nhiệm vụ!
+                </div>
+                <div class="victory-reward">
+                    <div class="reward-item">💰 Nhận 100 điểm thưởng!</div>
+                </div>
+            </div>
+            <div class="victory-actions">
+                <button class="btn btn-success btn-large" onclick="endBattleAndContinue(true)">
+                    ✅ Tiếp tục
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="game.js"></script>
+</body>
+</html>
