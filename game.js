@@ -702,7 +702,7 @@ function initializeQuests() {
         completed: false,
         prerequisites: [10],
         rewards: [
-            { type: 'skill', name: 'Jab', rarity: 'bronze', effect: 'damage+10' }
+            { type: 'skill', name: 'Jab', rarity: 'bronze', effect: 'damage+100000000' }
         ],
         points: 15,
         boss: null
@@ -1941,7 +1941,7 @@ function initializeQuests() {
             { type: 'special', name: 'Danh hiệu: Vua Gangbuk', rarity: 'challenger', effect: 'title_gangbuk_king' }
         ],
         points: 100,
-        boss: { name: "👹 No.1 Choyun (Transcendent)", stats: [30, 30, 30] }
+        boss: { name: "👹 No.1 Choyun (Transcendent)", stats: [25, 25, 25] }
     });
 
     // Auto-assign challenges to non-combat quests
@@ -2188,7 +2188,8 @@ function completeQuestDirectly(quest) {
     // Mark as completed
     quest.completed = true;
     gameState.completedQuests++;
-    gameState.totalPoints += quest.points;
+    // Increase quest reward multiplier so players can afford shop inventory
+    gameState.totalPoints += Math.round(quest.points * 100);
     
     // Auto-increase Intelligence slowly (every 25 quests) and Potential
     // Intelligence grows slowly: +1 every 25 quests (not every quest)
@@ -2366,7 +2367,13 @@ function useSpecialCard(cardIndex) {
 // Apply stat increase from card
 function applyStat(stat, cardIndex) {
     const card = gameState.inventory[cardIndex];
-    const statCap = STAT_CONFIG.getStatCap({ target: 'player' });
+    // Base stat cap from progression logic
+    let statCap = STAT_CONFIG.getStatCap({ target: 'player' });
+    // If Quest 498 completed, purchased stat cards from shop may raise stats beyond DX up to index 25
+    const quest498Completed = (gameState.quests && (gameState.quests.find(q => q.id === 498) || {}).completed);
+    if (quest498Completed && card && card.source === 'shop' && card.type === 'stat') {
+        statCap = Math.max(statCap, 25);
+    }
     
     const effectMap = {
         'strength': { 'strength+1': 1, 'strength+2': 2, 'strength+3': 3, 'strength+5': 5 },
@@ -3157,14 +3164,20 @@ const SHOP_INVENTORY = [
     { type: 'stat', name: 'Thẻ Tốc độ Diamond', rarity: 'diamond', effect: 'speed+5', price: 1000 },
     { type: 'stat', name: 'Thẻ Chịu đòn Diamond', rarity: 'diamond', effect: 'durability+5', price: 1000 },
     { type: 'stat', name: 'Thẻ Stat Diamond', rarity: 'diamond', effect: 'all_stats+4', price: 1500 },
+    // Special: Anti One-Shot (Diamond) - auto-activates once per battle, grants 2 turns preventing 1-hit KO
+    { type: 'special', name: 'Thẻ Bảo Hộ Kim Cương', rarity: 'diamond', effect: 'anti_one_shot_2turns', price: 2500 },
     
     // Skill Cards
     { type: 'skill', name: 'Overhand', rarity: 'bronze', effect: 'damage+15', price: 75 },
     { type: 'skill', name: 'Cross Hook', rarity: 'silver', effect: 'damage+30', price: 150 },
     { type: 'skill', name: 'Uppercut', rarity: 'gold', effect: 'damage+50', price: 300 },
     { type: 'skill', name: 'Iron Fist', rarity: 'silver', effect: 'damage+90', price: 150 },
-    { type: 'skill', name: 'Megaton Impact', rarity: 'master', effect: 'damage+150', price: 1500 },
-    
+    { type: 'skill', name: 'Megaton Impact', rarity: 'diamond', effect: 'damage+150', price: 1500 },
+    { type: 'skill', name: 'Pit Facebreaker', rarity: 'diamond', effect: 'damage+500', price: 5000 },
+    { type: 'skill', name: 'Oblivion Crush', rarity: 'diamond', effect: 'damage+5000', price: 10000 },
+    { type: 'skill', name: 'Oblivion Haymaker', rarity: 'diamond', effect: 'damage+15000', price: 15000 },
+    { type: 'skill', name: 'Overlord Primal Crush', rarity: 'diamond', effect: 'damage+50000', price: 20000 },
+
     // Support Cards
     { type: 'support', name: 'Healing Rice', rarity: 'silver', effect: 'heal+30%', price: 150 },
     { type: 'support', name: 'Senzu Bean', rarity: 'gold', effect: 'full_heal', price: 300 },
@@ -3265,18 +3278,24 @@ function buyCard(shopIndex) {
     const card = SHOP_INVENTORY[shopIndex];
     if (!card) return;
     
-    if (gameState.points < card.price) {
-        alert(`⛔ Không đủ điểm! Cần ${card.price} điểm, bạn có ${gameState.points} điểm.`);
+    if (gameState.totalPoints < card.price) {
+        alert(`⛔ Không đủ điểm! Cần ${card.price} điểm, bạn có ${gameState.totalPoints} điểm.`);
         return;
     }
-    
-    gameState.points -= card.price;
+   
+    gameState.totalPoints -= card.price;
     gameState.inventory.push({
         type: card.type,
         name: card.name,
         rarity: card.rarity,
-        effect: card.effect
+        effect: card.effect,
+        source: 'shop' // mark as purchased from shop
     });
+    // If the purchased card is a skill or support, remove it from the shop (single-purchase)
+    if (card.type === 'skill' || card.type === 'support') {
+        // Remove the exact index from SHOP_INVENTORY so it disappears from the shop
+        SHOP_INVENTORY.splice(shopIndex, 1);
+    }
     
     updateUI();
     updateShop();
@@ -3343,6 +3362,14 @@ function startBattle(questId) {
             if (c && c.type === 'support') delete c._usedThisBattle;
         });
     }
+    // Reset per-battle usage for anti one-shot diamond card
+    if (gameState.inventory && gameState.inventory.length > 0) {
+        gameState.inventory.forEach(c => {
+            if (c && c.effect === 'anti_one_shot_2turns') c._antiOneShotUsedThisBattle = false;
+        });
+    }
+    // Reset charges counter for anti-one-shot
+    battleState._antiOneShotCharges = 0;
 
     // Set up player stats (based on character)
     battleState.playerStats = {
@@ -3352,7 +3379,7 @@ function startBattle(questId) {
     };
 
     // Set up player HP
-    battleState.playerMaxHP = 150 + (getStatValue(gameState.character.durability) * 20);
+    battleState.playerMaxHP = 200 + (getStatValue(gameState.character.durability) * 20);
     battleState.playerHP = battleState.playerMaxHP;
     battleState.playerShield = 0;  // Reset player shield
     battleState.enemyShield = 0;   // Reset enemy shield
@@ -3482,7 +3509,7 @@ function startBattleWithCrew() {
     battleState.selectedCrew.forEach(crewIdx => {
         const member = gameState.crew[crewIdx];
         if (!member) return;
-        const maxHp = 100 + (getStatValue(member.stats[2]) * 10);
+        const maxHp = 200 + (getStatValue(member.stats[2]) * 20);
         battleState.crewParticipants.push({ crewIndex: crewIdx, hp: maxHp, maxHp: maxHp });
     });
     initializeTurnOrder();
@@ -3516,7 +3543,7 @@ function initializeTurnOrder() {
         // initialize participants based on selectedCrew
         battleState.selectedCrew.forEach(crewIdx => {
             const member = gameState.crew[crewIdx];
-            const maxHp = 100 + (getStatValue(member.stats[2]) * 5);
+            const maxHp = 200 + (getStatValue(member.stats[2]) * 20);
             battleState.crewParticipants.push({ crewIndex: crewIdx, hp: maxHp, maxHp: maxHp, defendingLastTurn: false });
         });
     }
@@ -4181,6 +4208,29 @@ function applyDamageToPlayer(damage) {
     }
     // Then reduce HP
     if (damage > 0) {
+        // If anti-one-shot charges active, block this incoming damage entirely and consume one charge
+        if (battleState._antiOneShotCharges > 0) {
+            battleState._antiOneShotCharges -= 1;
+            addBattleLog(`🛡️ Thẻ Bảo Hộ chặn đòn! Còn ${battleState._antiOneShotCharges} đòn có thể chặn.`);
+            if (battleState._antiOneShotCharges === 0) addBattleLog('🕒 Hiệu ứng Thẻ Bảo Hộ Kim Cương đã kết thúc.');
+            return;
+        }
+
+        // Auto-activate anti-one-shot diamond card if this hit would be lethal and not yet used this battle
+        if (gameState.inventory && Array.isArray(gameState.inventory)) {
+            const antiCard = gameState.inventory.find(c => c && c.effect === 'anti_one_shot_2turns' && !c._antiOneShotUsedThisBattle);
+            if (antiCard && damage >= battleState.playerHP) {
+                // Activate the effect: give 2 charges that block two hits (including this one)
+                antiCard._antiOneShotUsedThisBattle = true;
+                battleState._antiOneShotCharges = 2;
+                // Immediately consume one charge to block current damage
+                battleState._antiOneShotCharges -= 1;
+                addBattleLog('🛡️ Thẻ Bảo Hộ Kim Cương kích hoạt! Đã chặn đòn này và còn 1 đòn có thể chặn.');
+                if (battleState._antiOneShotCharges === 0) addBattleLog('🕒 Hiệu ứng Thẻ Bảo Hộ Kim Cương đã kết thúc.');
+                return;
+            }
+        }
+
         battleState.playerHP = Math.max(0, battleState.playerHP - damage);
     }
 }
@@ -4847,6 +4897,7 @@ function useSupportCard(cardIndex) {
         const supportEffects = {
             'heal+10%': () => battleState.playerMaxHP * 0.1,
             'heal+30%': () => battleState.playerMaxHP * 0.3,
+            'heal+50%': () => battleState.playerMaxHP * 0.5,
             'heal+70%': () => battleState.playerMaxHP * 0.7,
             'heal+100%': () => battleState.playerMaxHP,
             'heal+full': () => battleState.playerMaxHP,
@@ -5231,7 +5282,8 @@ function endBattleAndContinue(isWin) {
         const quest = gameState.quests.find(q => q.id === questId);
         quest.completed = true;
         gameState.completedQuests++;
-        gameState.totalPoints += quest.points + 100; // 100 bonus for winning
+        // Increase post-battle reward multiplier so players can afford shop inventory
+        gameState.totalPoints += Math.round((quest.points + 100) * 10); // 100 bonus for winning, then 10x multiplier
 
         // Auto-increase Intelligence slowly (every 3 quests) and Potential
         // Intelligence grows slowly: +1 every 3 quests
