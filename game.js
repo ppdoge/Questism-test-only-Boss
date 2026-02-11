@@ -5783,4 +5783,133 @@ function cancelChallenge() {
 // Initialize when page loads
 window.addEventListener('DOMContentLoaded', function() {
     initGame();
+    // Attach import file handler
+    const importEl = document.getElementById('importFile');
+    if (importEl) {
+        importEl.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                try {
+                    const data = JSON.parse(evt.target.result);
+                    loadGameFromObject(data);
+                    alert('✅ Save imported and loaded successfully.');
+                } catch (err) {
+                    alert('❌ File không hợp lệ: ' + err.message);
+                }
+            };
+            reader.readAsText(file);
+            // reset input
+            e.target.value = '';
+        });
+    }
 });
+
+// ---- Save / Load System ----
+function getSaveObject() {
+    // Create a sanitized copy of gameState and minimal battleState for resuming
+    const save = {
+        version: 1,
+        timestamp: Date.now(),
+        gameState: structuredClone ? structuredClone(gameState) : JSON.parse(JSON.stringify(gameState)),
+        battleState: {
+            isActive: battleState.isActive,
+            currentQuestId: battleState.currentQuestId,
+            round: battleState.round,
+            playerHP: battleState.playerHP,
+            playerMaxHP: battleState.playerMaxHP,
+            playerStats: battleState.playerStats,
+            playerShield: battleState.playerShield,
+            enemyHP: battleState.enemyHP,
+            enemyMaxHP: battleState.enemyMaxHP,
+            enemyStats: battleState.enemyStats,
+            minionHPs: battleState.minionHPs,
+            minionMaxHPs: battleState.minionMaxHPs,
+            crewParticipants: battleState.crewParticipants,
+            turnOrder: battleState.turnOrder,
+            currentTurnerIndex: battleState.currentTurnerIndex,
+            cardCooldowns: battleState.cardCooldowns,
+            _antiOneShotCharges: battleState._antiOneShotCharges || 0
+        }
+    };
+    return save;
+}
+
+function saveGame() {
+    try {
+        const save = getSaveObject();
+        localStorage.setItem('questism_save_v1', JSON.stringify(save));
+        alert('✅ Trò chơi đã được lưu (localStorage).');
+    } catch (e) {
+        alert('❌ Lỗi khi lưu: ' + e.message);
+    }
+}
+
+function loadGame() {
+    try {
+        const raw = localStorage.getItem('questism_save_v1');
+        if (!raw) { alert('❌ Không tìm thấy save trong localStorage.'); return; }
+        const data = JSON.parse(raw);
+        loadGameFromObject(data);
+        alert('✅ Save đã được tải từ localStorage.');
+    } catch (e) {
+        alert('❌ Lỗi khi tải save: ' + e.message);
+    }
+}
+
+function loadGameFromObject(data) {
+    if (!data || !data.gameState) return;
+    // Restore gameState fully
+    try {
+        // Replace gameState properties safely
+        for (const k in gameState) delete gameState[k];
+        Object.assign(gameState, data.gameState);
+
+        // Restore selected battleState fields
+        const bs = data.battleState || {};
+        battleState.isActive = !!bs.isActive;
+        battleState.currentQuestId = bs.currentQuestId || null;
+        battleState.round = bs.round || 0;
+        battleState.playerHP = bs.playerHP || 0;
+        battleState.playerMaxHP = bs.playerMaxHP || 0;
+        battleState.playerStats = bs.playerStats || battleState.playerStats;
+        battleState.playerShield = bs.playerShield || 0;
+        battleState.enemyHP = bs.enemyHP || 0;
+        battleState.enemyMaxHP = bs.enemyMaxHP || 0;
+        battleState.enemyStats = bs.enemyStats || battleState.enemyStats;
+        battleState.minionHPs = bs.minionHPs || battleState.minionHPs;
+        battleState.minionMaxHPs = bs.minionMaxHPs || battleState.minionMaxHPs;
+        battleState.crewParticipants = bs.crewParticipants || [];
+        battleState.turnOrder = bs.turnOrder || [];
+        battleState.currentTurnerIndex = bs.currentTurnerIndex || 0;
+        battleState.cardCooldowns = bs.cardCooldowns || {};
+        battleState._antiOneShotCharges = bs._antiOneShotCharges || 0;
+
+        updateUI();
+        if (battleState.isActive) {
+            // Resume battle view if needed
+            initializeTurnOrder();
+            showBattleScreen();
+        }
+    } catch (e) {
+        console.error('Error loading save object:', e);
+    }
+}
+
+function exportSave() {
+    try {
+        const save = getSaveObject();
+        const blob = new Blob([JSON.stringify(save, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `questism_save_${new Date().toISOString()}.json`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+    } catch (e) {
+        alert('❌ Lỗi khi xuất save: ' + e.message);
+    }
+}

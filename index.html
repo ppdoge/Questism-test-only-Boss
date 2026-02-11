@@ -12,6 +12,13 @@
         <div class="game-header">
             <h1 class="game-title">⚔️ QUESTISM ⚔️</h1>
             <p class="game-subtitle">Hành Trình Thống Nhất Gangbuk</p>
+            <div class="header-actions" style="position:absolute; right:20px; top:18px;">
+                <button class="btn btn-secondary small" onclick="saveGame()">Lưu</button>
+                <button class="btn btn-secondary small" onclick="loadGame()">Tải</button>
+                <button class="btn btn-secondary small" onclick="exportSave()">Xuất</button>
+                <button class="btn btn-secondary small" onclick="document.getElementById('importFile').click()">Nhập</button>
+                <input type="file" id="importFile" style="display:none" accept="application/json" />
+            </div>
         </div>
 
         <!-- Progress Section -->
