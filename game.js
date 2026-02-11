@@ -702,7 +702,7 @@ function initializeQuests() {
         completed: false,
         prerequisites: [10],
         rewards: [
-            { type: 'skill', name: 'Jab', rarity: 'bronze', effect: 'damage+100000000' }
+            { type: 'skill', name: 'Jab', rarity: 'bronze', effect: 'damage+10' }
         ],
         points: 15,
         boss: null
