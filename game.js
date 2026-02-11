@@ -2608,9 +2608,19 @@ function useCultivationCard(cardIndex) {
     if (card.statType === 'speed') stat = 'speed';
     else if (card.statType === 'durability') stat = 'durability';
     
+    // Count remaining cultivation cards of the same type in inventory
+    const sameTypeCards = gameState.inventory.filter(c => 
+        c && c.type === 'cultivation' && c.statType === card.statType
+    ).length;
+    
     let html = `
         <div style="padding: 20px;">
             <h3>${card.name}</h3>
+            <div style="background:rgba(52,152,219,0.1); border-left:4px solid #3498db; padding:10px; margin-bottom:15px; border-radius:4px;">
+                <small>💡 Có sẵn ${sameTypeCards} thẻ loại này trong kho. Chọn số lượng thẻ cần sử dụng:</small><br>
+                <input type="number" id="cultivationBatchInput" min="1" max="${sameTypeCards}" value="1" 
+                       style="width:70px; padding:5px; margin-top:5px; border-radius:4px; border:1px solid #3498db;">
+            </div>
             <p style="color: #bdc3c7; margin-bottom: 20px;">Chọn thành viên để tăng chỉ số:</p>
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px;">
     `;
@@ -2635,31 +2645,93 @@ function useCultivationCard(cardIndex) {
     showCardModal('Sử Dụng Thẻ Bồi Dưỡng', html);
 }
 
-// Apply cultivation card directly to member (new function)
+// Apply cultivation card directly to member with batch support
 function applyCultivationToMember(memberIndex, cardIndex, stat) {
     const card = gameState.inventory[cardIndex];
     const statIndex = stat === 'strength' ? 0 : (stat === 'speed' ? 1 : 2);
     const statCap = STAT_CONFIG.getStatCap({ target: 'crew' });
     
-    // Determine increase amount based on card level
-    // Determine increase amount based on card level (treat as card-units)
-    let units = 1;
-    if (card.level === 2) units = 2;
-    else if (card.level === 3) units = 3;
-    else if (card.level === 5) units = 5;
+    // Get batch input value (if exists) or default to 1
+    const batchInput = document.getElementById('cultivationBatchInput');
+    let batchCount = batchInput ? parseInt(batchInput.value) || 1 : 1;
+    batchCount = Math.max(1, batchCount);
+    
+    // Count available cards of the same type to consume
+    const sameTypeCards = gameState.inventory.filter(c => 
+        c && c.type === 'cultivation' && c.statType === card.statType
+    );
+    
+    if (batchCount > sameTypeCards.length) {
+        alert('❌ Không đủ thẻ bồi dưỡng loại này!');
+        return;
+    }
+
+    // Determine units per card based on level
+    let unitsPerCard = 1;
+    if (card.level === 2) unitsPerCard = 2;
+    else if (card.level === 3) unitsPerCard = 3;
+    else if (card.level === 5) unitsPerCard = 5;
+    
+    const totalUnits = batchCount * unitsPerCard;
+    
+    // Check if total units would exceed current stat cap (waste warning)
+    const currentStat = gameState.crew[memberIndex].stats[statIndex];
+    if (currentStat >= statCap) {
+        alert('⚠️ Chỉ số hiện đã đạt tối đa, vui lòng hoàn thành Quest để mở khóa chỉ số cao hơn');
+        closeModal();
+        return;
+    }
+    
+    // Calculate how many units can actually be used before hitting cap
+    let usableUnits = totalUnits;
+    let tempStat = currentStat;
+    let tempProgress = gameState.crew[memberIndex].statProgress?.[statIndex] || 0;
+    
+    // Simulate to count how many units will actually be used
+    let simUnits = 0;
+    for (let i = 0; i < totalUnits && tempStat < statCap; i++) {
+        if (tempStat < 8) {
+            tempStat += 1;
+        } else {
+            const required = cardsRequiredForFromIndex(tempStat);
+            tempProgress += 1;
+            if (tempProgress >= required) {
+                tempStat += 1;
+                tempProgress -= required;
+            }
+        }
+        simUnits++;
+    }
+    
+    const wastedCards = totalUnits - simUnits;
+    
+    // If there will be wasted cards, show warning
+    if (wastedCards > 0) {
+        const confirmMsg = `⚠️ Thẻ đã dùng vượt quá giới hạn chỉ số hiện tại!\n\n` +
+            `Bạn sắp sử dụng ${batchCount} thẻ (${totalUnits} đơn vị), nhưng chỉ ${simUnits} đơn vị sẽ được sử dụng.\n` +
+            `${wastedCards} thẻ dư thừa sẽ bị mất, bạn có muốn tiếp tục không?`;
+        
+        if (!confirm(confirmMsg)) {
+            closeModal();
+            return;
+        }
+    }
 
     // ensure member progress array exists
     if (!gameState.crew[memberIndex].statProgress) gameState.crew[memberIndex].statProgress = [0,0,0];
 
     // helper to apply units
     function applyToMember(idxUnits) {
+        let appliedCount = 0;
         // below SSS behave normally
         if (gameState.crew[memberIndex].stats[statIndex] < 8) {
-            gameState.crew[memberIndex].stats[statIndex] = Math.min(
-                gameState.crew[memberIndex].stats[statIndex] + idxUnits,
-                statCap
+            const added = Math.min(
+                idxUnits,
+                statCap - gameState.crew[memberIndex].stats[statIndex]
             );
-            return true;
+            gameState.crew[memberIndex].stats[statIndex] += added;
+            appliedCount = added;
+            idxUnits -= added;
         }
 
         let gained = false;
@@ -2677,19 +2749,20 @@ function applyCultivationToMember(memberIndex, cardIndex, stat) {
         return gained;
     }
 
-    // If already at max
-    if (gameState.crew[memberIndex].stats[statIndex] >= statCap) {
-        alert('⚠️ Chỉ số hiện đã đạt tối đa, vui lòng hoàn thành Quest để mở khóa chỉ số cao hơn');
-        closeModal();
-        return;
+    applyToMember(simUnits);
+
+    // Remove batch of cards from inventory
+    for (let i = 0; i < batchCount; i++) {
+        // Find and remove one card of the same type
+        const cardToRemoveIdx = gameState.inventory.findIndex(c => 
+            c && c.type === 'cultivation' && c.statType === card.statType
+        );
+        if (cardToRemoveIdx !== -1) {
+            gameState.inventory.splice(cardToRemoveIdx, 1);
+        }
     }
 
-    applyToMember(units);
-
-    // Remove card
-    gameState.inventory.splice(cardIndex, 1);
-
-    alert(`✅ ${gameState.crew[memberIndex].name} nhận ${units} đơn vị bồi dưỡng cho ${stat}.`);
+    alert(`✅ ${gameState.crew[memberIndex].name} nhận ${simUnits} đơn vị bồi dưỡng cho ${stat} từ ${batchCount} thẻ.${wastedCards > 0 ? `\n(${wastedCards} thẻ bị lãng phí)` : ''}`);
 
     closeModal();
     updateUI();
