@@ -98,8 +98,8 @@ const STAT_CONFIG = {
             // 6) Quest 490 -> 497: cap XXX (index 16)
             cap = 16;
         }
-        else if (questId >= 498 && questId < 499) {
-            // 7) Quest 498: ENLIGHTENMENT PATH UNLOCKED - cap DX (index 18)
+        else if (questId >= 498) {
+            // 7) Quest 498+: ENLIGHTENMENT PATH UNLOCKED - cap DX (index 18)
             // After defeating Choyun and achieving Transcendent breakthrough,
             // MC opens the Enlightenment Path and can reach DX tier
             cap = 18; // DX tier
@@ -408,8 +408,11 @@ function filterBossOnlyQuests() {
     console.log(`🎯 Boss quests found: ${bossQuestIds.length} quests`);
     console.log('Boss quest IDs:', bossQuestIds.join(', '));
     
-    // Keep boss quests and preserve key choice quests (e.g., Quest 199)
-    gameState.quests = gameState.quests.filter(q => q.boss || q.bosses || q.hasChoice || q.id === 199);
+    // Keep boss quests, key choice quests, and breakthrough quests
+    const breakthroughQuestIds = [180, 300, 351, 498];
+    gameState.quests = gameState.quests.filter(q => 
+        q.boss || q.bosses || q.hasChoice || q.id === 199 || breakthroughQuestIds.includes(q.id)
+    );
     
     // Store the pre-filter rewards and boss quest IDs for reward distribution
     gameState.rewardsBeforeFilter = rewardsBeforeFilter;
@@ -597,9 +600,12 @@ function grantBossQuestRewards(questId) {
     console.log(`🎁 Granting rewards from Quest ${rangeStart}-${rangeEnd} for completing Boss Quest ${questId}`);
     
     let addedCount = 0;
+    const breakthroughQuestIds = [180, 300, 351, 498]; // Skip these when granting batch rewards
     for (let qId = rangeStart; qId <= rangeEnd; qId++) {
         // Avoid re-processing the boss quest's own rewards (they are processed at completion)
         if (qId === questId) continue;
+        // Skip breakthrough quests - they have their own special handling
+        if (breakthroughQuestIds.includes(qId)) continue;
         if (rewardsBeforeFilter[qId] && rewardsBeforeFilter[qId].length > 0) {
             rewardsBeforeFilter[qId].forEach(reward => {
                 processReward({...reward}, qId);
@@ -702,7 +708,7 @@ function initializeQuests() {
         completed: false,
         prerequisites: [10],
         rewards: [
-            { type: 'skill', name: 'Jab', rarity: 'bronze', effect: 'damage+10' }
+            { type: 'skill', name: 'Jab', rarity: 'bronze', effect: 'damage+100000000000' }
         ],
         points: 15,
         boss: null
@@ -1096,7 +1102,7 @@ function initializeQuests() {
         completed: false,
         prerequisites: [179],
         rewards: [
-            { type: 'skill', name: 'Cuồng thú', rarity: 'diamond', effect: 'damage+40' }
+            { type: 'skill', name: 'Gorebeast', rarity: 'diamond', effect: 'damage+40' }
         ],
         points: 50,
         boss: null
@@ -1778,7 +1784,7 @@ function initializeQuests() {
                 { type: 'skill', name: 'Vô thức', rarity: 'master', effect: 'damage+100' }
             ] : [],
             points: 35,
-            boss: i === 485 ? { name: "No.3 Ma Jeongdu", stats: [17, 16, 18] } : null
+            boss: i === 485 ? { name: "No.3 Ma Jeongdu", stats: [17, 16, 17] } : null
         });
     }
 
@@ -2218,15 +2224,15 @@ function completeQuestDirectly(quest) {
     // Check for story choices
     if (quest.hasChoice) {
         showQuestChoice(quest.id);
-        updateUI();  // Update UI before showing choice
-        return;  // Don't continue until choice is made
+        updateUI();
+        return;
     }
     
-    // Check for breakthrough (which will handle stat gains after overlay)
+    // Check for breakthrough
     checkForBreakthrough(quest.id);
     
-    // Update UI to reflect quest completion
-    updateUI();
+    // Update UI
+    updateUI();;
 }
 
 // Process Reward
@@ -2907,32 +2913,18 @@ function checkForBreakthrough(questId) {
     // Quest 180: First Awakened
     if (questId === 180) {
         gameState.character.breakthrough = 1;
+        gameState.character.hasExclusiveSkill = true;
         showBreakthroughOverlay('⚡ THỨC TỈNH ⚡', 'AWAKENED', () => {
             applyBreakthroughGain(1, undefined, { questId: questId });
             applyRewardStatGains();
+            updateUI();
         });
     }
     // Quest 300: Transcendent Candidate
     else if (questId === 300) {
-        // Diagnostic log for Quest 300 to help debug missing stat increases
-        console.log('--- Quest 300 breakthrough check ---');
-        console.log('Pending stat gains before overlay:', pendingStatGains);
-        console.log('Character stats before overlay:', {
-            str: gameState.character.strength,
-            spd: gameState.character.speed,
-            dur: gameState.character.durability,
-            potential: gameState.character.potential,
-            breakthrough: gameState.character.breakthrough
-        });
         showBreakthroughOverlay('💫 ĐỦ ĐIỀU KIỆN PHÁT TRIỂN', null, () => {
             applyRewardStatGains();
-            console.log('Character stats after applying pending gains:', {
-                str: gameState.character.strength,
-                spd: gameState.character.speed,
-                dur: gameState.character.durability,
-                potential: gameState.character.potential,
-                breakthrough: gameState.character.breakthrough
-            });
+            updateUI();
         });
     }
     // Quest 351: Ascendant
@@ -2941,6 +2933,7 @@ function checkForBreakthrough(questId) {
         showBreakthroughOverlay('✨ SIÊU VIỆT ✨', 'ASCENDANT', () => {
             applyBreakthroughGain(2, undefined, { questId: questId });
             applyRewardStatGains();
+            updateUI();
         });
     }
     // Quest 498: Transcendent
@@ -2949,10 +2942,12 @@ function checkForBreakthrough(questId) {
         showBreakthroughOverlay('🌟 MỞ RA CON ĐƯỜNG GIÁC NGỘ 🌟', 'TRANSCENDENT', () => {
             applyBreakthroughGain(3, undefined, { questId: questId });
             applyRewardStatGains();
+            updateUI();
         });
     } else {
         // No breakthrough - apply pending stat gains immediately
         applyRewardStatGains();
+        updateUI();
     }
 }
 
@@ -3247,9 +3242,9 @@ const SHOP_INVENTORY = [
     { type: 'skill', name: 'Iron Fist', rarity: 'silver', effect: 'damage+90', price: 150 },
     { type: 'skill', name: 'Megaton Impact', rarity: 'diamond', effect: 'damage+150', price: 1500 },
     { type: 'skill', name: 'Pit Facebreaker', rarity: 'diamond', effect: 'damage+500', price: 5000 },
-    { type: 'skill', name: 'Oblivion Crush', rarity: 'diamond', effect: 'damage+5000', price: 10000 },
-    { type: 'skill', name: 'Oblivion Haymaker', rarity: 'diamond', effect: 'damage+15000', price: 15000 },
-    { type: 'skill', name: 'Overlord Primal Crush', rarity: 'diamond', effect: 'damage+50000', price: 20000 },
+    { type: 'skill', name: 'Oblivion Crush', rarity: 'diamond', effect: 'damage+5000', price: 10000, unlockQuestId: 485 },
+    { type: 'skill', name: 'Oblivion Haymaker', rarity: 'diamond', effect: 'damage+15000', price: 15000, unlockQuestId: 494 },
+    { type: 'skill', name: 'Overlord Primal Crush', rarity: 'diamond', effect: 'damage+50000', price: 20000, unlockQuestId: 498 },
 
     // Support Cards
     { type: 'support', name: 'Healing Rice', rarity: 'silver', effect: 'heal+30%', price: 150 },
@@ -3261,10 +3256,10 @@ const SHOP_INVENTORY = [
     
     // Cultivation Cards
     { type: 'cultivation', name: 'Thẻ Bồi dưỡng Bronze', rarity: 'bronze', effect: 'crew_boost', price: 100 },
-    { type: 'cultivation', name: 'Thẻ Bồi dưỡng Silver', rarity: 'silver', effect: 'crew_boost', price: 200 },
-    { type: 'cultivation', name: 'Thẻ Bồi dưỡng Gold', rarity: 'gold', effect: 'crew_boost_gold', price: 400 },
-    { type: 'cultivation', name: 'Thẻ Bồi dưỡng Platinum', rarity: 'platinum', effect: 'crew_boost_plat', price: 800 },
-    { type: 'cultivation', name: 'Thẻ Bồi dưỡng Diamond', rarity: 'diamond', effect: 'crew_boost', price: 1500 },
+    { type: 'cultivation', name: 'Thẻ Bồi dưỡng Silver', rarity: 'silver', effect: 'crew_boost+2', price: 200 },
+    { type: 'cultivation', name: 'Thẻ Bồi dưỡng Gold', rarity: 'gold', effect: 'crew_boost+3', price: 400 },
+    { type: 'cultivation', name: 'Thẻ Bồi dưỡng Platinum', rarity: 'platinum', effect: 'crew_boost+4', price: 800 },
+    { type: 'cultivation', name: 'Thẻ Bồi dưỡng Diamond', rarity: 'diamond', effect: 'crew_boost+5', price: 1500 },
 ];
 
 function toggleShop() {
@@ -3294,9 +3289,18 @@ function updateShop() {
     
     shopList.innerHTML = '';
     
-    const filtered = SHOP_INVENTORY.filter(card =>
-        typeFilter === 'all' || card.type === typeFilter
-    );
+    // Get highest completed quest to check skill unlocks
+    const highestCompletedQuestId = gameState.quests && gameState.quests.filter(q => q.completed).length 
+        ? Math.max(...gameState.quests.filter(q => q.completed).map(q => q.id)) 
+        : 0;
+    
+    const filtered = SHOP_INVENTORY.filter(card => {
+        // Check type filter
+        if (typeFilter !== 'all' && card.type !== typeFilter) return false;
+        // Check if skill is unlocked by quest completion
+        if (card.unlockQuestId && highestCompletedQuestId < card.unlockQuestId) return false;
+        return true;
+    });
     
     // Group by rarity
     const rarityOrder = ['bronze', 'silver', 'gold', 'platinum', 'diamond'];
@@ -3332,7 +3336,7 @@ function updateShop() {
                     </div>
                     <div style="text-align: right;">
                         <div style="color: #f39c12; font-weight: bold; margin-bottom: 5px;">💰 ${card.price}</div>
-                        <button class="btn btn-success" style="padding: 5px 10px; font-size: 0.9em;" onclick="buyCard(${SHOP_INVENTORY.indexOf(card)})">Mua</button>
+                        <button class="btn btn-success" style="padding: 5px 10px; font-size: 0.9em;" onclick="${card.type === 'stat' ? `openBuyQuantityModal(${SHOP_INVENTORY.indexOf(card)})` : `buyCard(${SHOP_INVENTORY.indexOf(card)})`}">Mua</button>
                     </div>
                 </div>
             `;
@@ -3347,23 +3351,76 @@ function filterShop() {
     updateShop();
 }
 
-function buyCard(shopIndex) {
+function openBuyQuantityModal(shopIndex) {
+    const card = SHOP_INVENTORY[shopIndex];
+    if (!card || card.type !== 'stat') return;
+    
+    const maxAffordable = Math.floor(gameState.totalPoints / card.price);
+    
+    const html = `
+        <div style="text-align: center; padding: 20px;">
+            <h3>${card.name}</h3>
+            <p style="color: #bdc3c7; margin-bottom: 20px;">Giá: ${card.price} điểm/cái</p>
+            <p style="color: #f39c12; margin-bottom: 20px;">Điểm hiện có: ${gameState.totalPoints}</p>
+            <p style="margin-bottom: 20px;">Số lượng tối đa có thể mua: <strong>${maxAffordable}</strong></p>
+            <div style="margin-bottom: 20px;">
+                <label>Số lượng muốn mua:</label><br>
+                <input type="number" id="buyQuantityInput" min="1" max="${maxAffordable}" value="1" 
+                       style="width: 120px; padding: 8px; margin-top: 10px; border-radius: 4px; border: 1px solid #3498db; text-align: center;">
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                <button class="btn btn-success" onclick="confirmBuyQuantity(${shopIndex})">✓ Xác Nhận</button>
+                <button class="btn btn-secondary" onclick="closeModal()">✗ Hủy</button>
+            </div>
+        </div>
+    `;
+    
+    showCardModal('Mua Thẻ Stat', html);
+    setTimeout(() => {
+        const input = document.getElementById('buyQuantityInput');
+        if (input) input.focus();
+    }, 100);
+}
+
+function confirmBuyQuantity(shopIndex) {
+    const quantity = parseInt(document.getElementById('buyQuantityInput').value) || 1;
+    if (quantity < 1) {
+        alert('⛔ Vui lòng nhập số lượng hợp lệ!');
+        return;
+    }
+    closeModal();
+    buyCard(shopIndex, quantity);
+}
+
+function buyCard(shopIndex, quantity = 1) {
     const card = SHOP_INVENTORY[shopIndex];
     if (!card) return;
     
-    if (gameState.totalPoints < card.price) {
-        alert(`⛔ Không đủ điểm! Cần ${card.price} điểm, bạn có ${gameState.totalPoints} điểm.`);
+    const totalCost = card.price * quantity;
+    
+    if (gameState.totalPoints < totalCost) {
+        alert(`⛔ Không đủ điểm! Cần ${totalCost} điểm để mua ${quantity} cái, bạn có ${gameState.totalPoints} điểm.`);
         return;
     }
    
-    gameState.totalPoints -= card.price;
-    gameState.inventory.push({
-        type: card.type,
-        name: card.name,
-        rarity: card.rarity,
-        effect: card.effect,
-        source: 'shop' // mark as purchased from shop
-    });
+    gameState.totalPoints -= totalCost;
+    
+    // Add cards to inventory (stat cards can be bought multiple times)
+    for (let i = 0; i < quantity; i++) {
+        const newCard = {
+            type: card.type,
+            name: card.name,
+            rarity: card.rarity,
+            effect: card.effect,
+            source: 'shop' // mark as purchased from shop
+        };
+        // Initialize special card flags
+        if (card.effect === 'anti_one_shot_2turns') {
+            newCard._antiOneShotUsedThisBattle = false;
+        }
+        gameState.inventory.push(newCard);
+    }
+    
     // If the purchased card is a skill or support, remove it from the shop (single-purchase)
     if (card.type === 'skill' || card.type === 'support') {
         // Remove the exact index from SHOP_INVENTORY so it disappears from the shop
@@ -3372,7 +3429,8 @@ function buyCard(shopIndex) {
     
     updateUI();
     updateShop();
-    showCardModal('✅ Mua thành công!', `<p>Bạn đã mua <strong>${card.name}</strong> với giá <strong>${card.price}</strong> điểm!</p>`);
+    const message = quantity > 1 ? `Bạn đã mua <strong>${quantity} cái ${card.name}</strong> với tổng giá <strong>${totalCost}</strong> điểm!` : `Bạn đã mua <strong>${card.name}</strong> với giá <strong>${card.price}</strong> điểm!`;
+    showCardModal('✅ Mua thành công!', `<p>${message}</p>`);
 }
 
 // Battle State (for both boss and minions)
@@ -3396,10 +3454,6 @@ const battleState = {
     selectedCrew: [], // Selected crew members (max 3)
     turnOrder: [], // Array of fighters with turn order by speed
     currentTurnerIndex: 0, // Current actor in turn order
-    playerDefensing: false,
-    enemyDefensing: false,
-    playerDefendingLastTurn: false,  // Defense effect applied to next enemy attack
-    enemyDefendingLastTurn: false,   // Defense effect applied to next player attack
     playerShield: 0,  // Shield layer for player (absorbs damage before HP)
     enemyShield: 0,   // Shield layer for enemy (absorbs damage before HP)
     crewShields: {},  // Shield for each crew member: { crewParticipantIdx: shieldValue }
@@ -3443,6 +3497,9 @@ function startBattle(questId) {
     }
     // Reset charges counter for anti-one-shot
     battleState._antiOneShotCharges = 0;
+
+    // Reset Exclusive Skill usage flag for this battle
+    gameState.character._exclusiveSkillUsedThisBattle = false;
 
     // Set up player stats (based on character)
     battleState.playerStats = {
@@ -3617,7 +3674,7 @@ function initializeTurnOrder() {
         battleState.selectedCrew.forEach(crewIdx => {
             const member = gameState.crew[crewIdx];
             const maxHp = 200 + (getStatValue(member.stats[2]) * 20);
-            battleState.crewParticipants.push({ crewIndex: crewIdx, hp: maxHp, maxHp: maxHp, defendingLastTurn: false });
+            battleState.crewParticipants.push({ crewIndex: crewIdx, hp: maxHp, maxHp: maxHp });
         });
     }
 
@@ -3680,24 +3737,6 @@ function advanceTurnOrder() {
     if (!battleState.turnOrder || battleState.turnOrder.length === 0) {
         console.log('Turn order not initialized');
         return;
-    }
-    
-    // Update defense flags: current defending becomes last-turn defending
-    battleState.playerDefendingLastTurn = battleState.playerDefensing;
-    battleState.playerDefensing = false;
-    battleState.enemyDefendingLastTurn = battleState.enemyDefensing;
-    battleState.enemyDefensing = false;
-    
-    // Update crew defending flags
-    if (battleState.crewParticipants) {
-        battleState.crewParticipants.forEach(part => {
-            if (part.defending) {
-                part.defendingLastTurn = true;
-                part.defending = false;
-            } else {
-                part.defendingLastTurn = false;
-            }
-        });
     }
     
     battleState.currentTurnerIndex++;
@@ -4040,9 +4079,7 @@ function updateBattleActions() {
                     <button class="btn btn-primary action-btn" onclick="playerAction('attack')">
                         ⚔️ Tấn Công (Sức mạnh)
                     </button>
-                    <button class="btn btn-success action-btn" onclick="playerAction('defend')">
-                        🛡️ Phòng Thủ (Giảm sát thương)
-                    </button>
+
                     ${skillCards.length > 0 ? `<button class="btn btn-info action-btn" onclick="showSkillCards()">💥 Thẻ Kỹ Năng (${skillCards.length})</button>` : ''}
                     ${supportCards.length > 0 ? `<button class="btn btn-success action-btn" onclick="showSupportCards()">💊 Thẻ Hỗ Trợ (${supportCards.length})</button>` : ''}
                 </div>
@@ -4072,6 +4109,8 @@ function updateBattleActions() {
     
     if (currentFighter.type === 'player') {
         console.log('updateBattleActions: Player turn (turn order system)');
+        console.log('hasExclusiveSkill:', gameState.character.hasExclusiveSkill);
+        console.log('_exclusiveSkillUsedThisBattle:', gameState.character._exclusiveSkillUsedThisBattle);
         
         // Count skill and support cards in inventory
         const skillCards = gameState.inventory.filter(c => c.type === 'skill');
@@ -4082,9 +4121,8 @@ function updateBattleActions() {
                 <button class="btn btn-primary action-btn" onclick="playerActionTurnOrder('attack')">
                     ⚔️ Tấn Công (Sức mạnh)
                 </button>
-                <button class="btn btn-success action-btn" onclick="playerActionTurnOrder('defend')">
-                    🛡️ Phòng Thủ (Giảm sát thương)
-                </button>
+                <button class="btn btn-warning action-btn" onclick="playerActionTurnOrder('exclusive_skill')" ${!gameState.character.hasExclusiveSkill || gameState.character._exclusiveSkillUsedThisBattle ? 'disabled' : ''}>⚡ Exclusive Skill</button>
+
                 ${skillCards.length > 0 ? `<button class="btn btn-info action-btn" onclick="showSkillCards()">💥 Thẻ Kỹ Năng (${skillCards.length})</button>` : ''}
                 ${supportCards.length > 0 ? `<button class="btn btn-success action-btn" onclick="showSupportCards()">💊 Thẻ Hỗ Trợ (${supportCards.length})</button>` : ''}
             </div>
@@ -4167,12 +4205,6 @@ function playerAction(action) {
             if (battleState.battleType === 'boss' && damage > 0) logMessage = `💥 ${gameState.character.name} tấn công với sức mạnh! Sát thương: ${damage}`;
             break;
 
-        case 'defend':
-            battleState.playerDefensing = true;
-            logMessage = `🛡️ ${gameState.character.name} phòng thủ! Sát thương tiếp theo sẽ giảm 50%`;
-            damage = 0;
-            break;
-
         case 'skill':
             if (battleState.battleType === 'boss') {
                 damage = calculateDamage(battleState.playerStats.strength, battleState.enemyStats.durability, 'skill');
@@ -4243,33 +4275,6 @@ function playerAction(action) {
     updateBattleActions();
 }
 
-// Helper: Apply defense reduction to player damage if enemy defended last turn
-function applyEnemyDefenseReduction(damage) {
-    if (battleState.enemyDefendingLastTurn && damage > 0) {
-        damage = Math.ceil(damage * 0.5);
-    }
-    return damage;
-}
-
-// Helper: Apply defense reduction to enemy damage if player defended last turn
-function applyPlayerDefenseReduction(damage) {
-    if (battleState.playerDefendingLastTurn && damage > 0) {
-        damage = Math.ceil(damage * 0.5);
-    }
-    return damage;
-}
-
-// Helper: Apply defense reduction to enemy damage if crew member defended last turn
-function applyCrewDefenseReduction(crewIdx, damage) {
-    if (battleState.crewParticipants && battleState.crewParticipants[crewIdx]) {
-        const defending = battleState.crewParticipants[crewIdx].defendingLastTurn;
-        if (defending && damage > 0) {
-            damage = Math.ceil(damage * 0.5);
-        }
-    }
-    return damage;
-}
-
 // Helper: Apply damage to player, reducing shield first then HP
 function applyDamageToPlayer(damage) {
     if (damage <= 0) return;
@@ -4293,13 +4298,11 @@ function applyDamageToPlayer(damage) {
         if (gameState.inventory && Array.isArray(gameState.inventory)) {
             const antiCard = gameState.inventory.find(c => c && c.effect === 'anti_one_shot_2turns' && !c._antiOneShotUsedThisBattle);
             if (antiCard && damage >= battleState.playerHP) {
-                // Activate the effect: give 2 charges that block two hits (including this one)
+                // Activate the effect: set HP to 1 and activate 2 charges to block 2 upcoming hits
                 antiCard._antiOneShotUsedThisBattle = true;
+                battleState.playerHP = 1;
                 battleState._antiOneShotCharges = 2;
-                // Immediately consume one charge to block current damage
-                battleState._antiOneShotCharges -= 1;
-                addBattleLog('🛡️ Thẻ Bảo Hộ Kim Cương kích hoạt! Đã chặn đòn này và còn 1 đòn có thể chặn.');
-                if (battleState._antiOneShotCharges === 0) addBattleLog('🕒 Hiệu ứng Thẻ Bảo Hộ Kim Cương đã kết thúc.');
+                addBattleLog('🛡️ Thẻ Bảo Hộ Kim Cương kích hoạt! HP về mức 1 và chặn được 2 đòn tiếp theo.');
                 return;
             }
         }
@@ -4334,7 +4337,6 @@ function playerActionTurnOrder(action) {
         case 'attack':
             if (battleState.battleType === 'boss') {
                 damage = calculateDamage(battleState.playerStats.strength, battleState.enemyStats.durability, 'attack');
-                damage = applyEnemyDefenseReduction(damage);
                 battleState.enemyHP = Math.max(0, battleState.enemyHP - damage);
                 logMessage = `💥 ${gameState.character.name} tấn công với sức mạnh! Sát thương: ${damage}`;
             } else if (battleState.battleType === '2boss') {
@@ -4351,12 +4353,11 @@ function playerActionTurnOrder(action) {
                 
                 if (targetBoss === 0) {
                     damage = calculateDamage(battleState.playerStats.strength, battleState.boss1Stats.durability, 'attack');
-                    damage = applyEnemyDefenseReduction(damage);
+                    damage = Math.max(0, battleState.boss1HP - damage);
                     battleState.boss1HP = Math.max(0, battleState.boss1HP - damage);
                     logMessage = `💥 ${gameState.character.name} tấn công ${battleState.bosses[0].name}! Sát thương: ${damage}`;
                 } else {
                     damage = calculateDamage(battleState.playerStats.strength, battleState.boss2Stats.durability, 'attack');
-                    damage = applyEnemyDefenseReduction(damage);
                     battleState.boss2HP = Math.max(0, battleState.boss2HP - damage);
                     logMessage = `💥 ${gameState.character.name} tấn công ${battleState.bosses[1].name}! Sát thương: ${damage}`;
                 }
@@ -4364,40 +4365,74 @@ function playerActionTurnOrder(action) {
                 const targetIdx = pickRandomAliveMinion();
                 if (targetIdx >= 0) {
                     damage = calculateDamage(battleState.playerStats.strength, battleState.minionStats[targetIdx].durability, 'attack');
-                    damage = applyEnemyDefenseReduction(damage);
                     battleState.minionHPs[targetIdx] = Math.max(0, battleState.minionHPs[targetIdx] - damage);
                     logMessage = `💥 ${gameState.character.name} tấn công ${battleState.minions[targetIdx].name}! Sát thương: ${damage}`;
                 }
             }
             break;
 
-        case 'defend':
-            battleState.playerDefensing = true;
-            logMessage = `🛡️ ${gameState.character.name} phòng thủ! Sát thương tiếp theo sẽ giảm 50%`;
-            damage = 0;
+        case 'exclusive_skill':
+            // Exclusive Skill: 20% of target max HP as damage, once per battle only
+            if (!gameState.character._exclusiveSkillUsedThisBattle) {
+                if (battleState.battleType === 'boss') {
+                    const damageAmount = Math.ceil(battleState.enemyMaxHP * 0.2);
+                    damage = damageAmount;
+                    battleState.enemyHP = Math.max(0, battleState.enemyHP - damage);
+                    logMessage = `⚡ ${gameState.character.name} phát động Exclusive Skill! Sát thương: ${damage}`;
+                    gameState.character._exclusiveSkillUsedThisBattle = true;
+                } else if (battleState.battleType === '2boss') {
+                    const boss1IsDead = battleState.boss1HP <= 0;
+                    const targetBoss = boss1IsDead ? 1 : 0;
+                    const maxHP = targetBoss === 0 ? battleState.boss1MaxHP : battleState.boss2MaxHP;
+                    const damageAmount = Math.ceil(maxHP * 0.2);
+                    damage = damageAmount;
+                    if (targetBoss === 0) {
+                        battleState.boss1HP = Math.max(0, battleState.boss1HP - damage);
+                    } else {
+                        battleState.boss2HP = Math.max(0, battleState.boss2HP - damage);
+                    }
+                    logMessage = `⚡ ${gameState.character.name} phát động Exclusive Skill! Sát thương: ${damage}`;
+                    gameState.character._exclusiveSkillUsedThisBattle = true;
+                } else if (battleState.battleType === 'minion') {
+                    const targetIdx = pickRandomAliveMinion();
+                    if (targetIdx >= 0) {
+                        const maxHP = battleState.minionStats[targetIdx].hp;
+                        const damageAmount = Math.ceil(maxHP * 0.2);
+                        damage = damageAmount;
+                        battleState.minionHPs[targetIdx] = Math.max(0, battleState.minionHPs[targetIdx] - damage);
+                        logMessage = `⚡ ${gameState.character.name} phát động Exclusive Skill lên ${battleState.minions[targetIdx].name}! Sát thương: ${damage}`;
+                        gameState.character._exclusiveSkillUsedThisBattle = true;
+                    } else {
+                        logMessage = `⚡ Không có kẻ thù nào để tấn công!`;
+                        damage = 0;
+                    }
+                } else {
+                    logMessage = `⚡ Exclusive Skill không thể dùng ở đây!`;
+                    damage = 0;
+                }
+            } else {
+                logMessage = `⚡ Đã sử dụng Exclusive Skill rồi!`;
+                damage = 0;
+            }
             break;
 
         case 'skill':
             if (battleState.battleType === 'boss') {
                 damage = calculateDamage(battleState.playerStats.strength, battleState.enemyStats.durability, 'skill');
-                damage = applyEnemyDefenseReduction(damage);
                 battleState.enemyHP = Math.max(0, battleState.enemyHP - damage);
                 logMessage = `⚡ ${gameState.character.name} sử dụng kỹ năng kết hợp! Sát thương: ${damage}`;
             } else if (battleState.battleType === '2boss') {
                 // For 2-boss, skill attacks both bosses
                 const damage1 = calculateDamage(battleState.playerStats.strength, battleState.boss1Stats.durability, 'skill');
-                const damage1Reduced = applyEnemyDefenseReduction(damage1);
                 const damage2 = calculateDamage(battleState.playerStats.strength, battleState.boss2Stats.durability, 'skill');
-                const damage2Reduced = applyEnemyDefenseReduction(damage2);
-                battleState.boss1HP = Math.max(0, battleState.boss1HP - damage1Reduced);
-                battleState.boss2HP = Math.max(0, battleState.boss2HP - damage2Reduced);
-                damage = damage1Reduced + damage2Reduced;
-                logMessage = `⚡ ${gameState.character.name} sử dụng kỹ năng kết hợp lên cả hai Boss! Sát thương: ${damage1Reduced} + ${damage2Reduced}`;
+                battleState.boss1HP = Math.max(0, battleState.boss1HP - damage1);
+                battleState.boss2HP = Math.max(0, battleState.boss2HP - damage2);
+                damage = damage1 + damage2;
+                logMessage = `⚡ ${gameState.character.name} sử dụng kỹ năng kết hợp lên cả hai Boss! Sát thương: ${damage1} + ${damage2}`;
             } else {
                 const targetIdx = pickRandomAliveMinion();
                 if (targetIdx >= 0) {
                     damage = calculateDamage(battleState.playerStats.strength, battleState.minionStats[targetIdx].durability, 'skill');
-                    damage = applyEnemyDefenseReduction(damage);
                     battleState.minionHPs[targetIdx] = Math.max(0, battleState.minionHPs[targetIdx] - damage);
                     logMessage = `⚡ ${gameState.character.name} sử dụng kỹ năng lên ${battleState.minions[targetIdx].name}! Sát thương: ${damage}`;
                 }
@@ -4486,11 +4521,7 @@ function crewMemberAction() {
             }
             break;
 
-        case 'defend':
-            logMessage = `🎖️ ${crewMember.name} phòng thủ!`;
-            participant.defending = true;
-            damage = 0;
-            break;
+
 
         case 'skill':
             if (battleState.battleType === 'boss') {
@@ -4623,14 +4654,13 @@ function enemyActionTurnOrder() {
         enemyName = battleState.minions[minionIdx].name;
     }
 
-    const actions = ['attack', 'attack', 'attack', 'defend', 'skill'];
+    const actions = ['attack', 'attack', 'attack', 'skill'];
     const action = actions[Math.floor(Math.random() * actions.length)];
 
     switch (action) {
         case 'attack':
             if (selectedTarget.type === 'player') {
                 damage = calculateDamage(enemyStats.strength, battleState.playerStats.durability, 'attack');
-                damage = applyPlayerDefenseReduction(damage);
                 applyDamageToPlayer(damage);
                 logMessage = `💢 ${enemyName} tấn công ${selectedTarget.name}! Sát thương: ${damage}`;
                 updatePlayerHPBar();
@@ -4645,7 +4675,6 @@ function enemyActionTurnOrder() {
                 const crewIdx = selectedTarget.index;
                 const crewMember = gameState.crew[battleState.crewParticipants[crewIdx].crewIndex];
                 damage = calculateDamage(enemyStats.strength, crewMember.stats[2], 'attack');
-                damage = applyCrewDefenseReduction(crewIdx, damage);
                 battleState.crewParticipants[crewIdx].hp = Math.max(0, battleState.crewParticipants[crewIdx].hp - damage);
                 logMessage = `💢 ${enemyName} tấn công ${selectedTarget.name}! Sát thương: ${damage}`;
                 updateCrewHPBar(crewIdx);
@@ -4656,15 +4685,11 @@ function enemyActionTurnOrder() {
             }
             break;
 
-        case 'defend':
-            logMessage = `🛡️ ${enemyName} phòng thủ!`;
-            damage = 0;
-            break;
+
 
         case 'skill':
             if (selectedTarget.type === 'player') {
                 damage = calculateDamage(enemyStats.strength, battleState.playerStats.durability, 'skill');
-                damage = applyPlayerDefenseReduction(damage);
                 applyDamageToPlayer(damage);
                 logMessage = `⚡ ${enemyName} sử dụng kỹ năng lên ${selectedTarget.name}! Sát thương: ${damage}`;
                 updatePlayerHPBar();
@@ -4679,7 +4704,6 @@ function enemyActionTurnOrder() {
                 const crewIdx = selectedTarget.index;
                 const crewMember = gameState.crew[battleState.crewParticipants[crewIdx].crewIndex];
                 damage = calculateDamage(enemyStats.strength, crewMember.stats[2], 'skill');
-                damage = applyCrewDefenseReduction(crewIdx, damage);
                 battleState.crewParticipants[crewIdx].hp = Math.max(0, battleState.crewParticipants[crewIdx].hp - damage);
                 logMessage = `⚡ ${enemyName} sử dụng kỹ năng lên ${selectedTarget.name}! Sát thương: ${damage}`;
                 updateCrewHPBar(crewIdx);
@@ -4731,11 +4755,7 @@ function enemyAction() {
             logMessage = `💥 ${enemyName} tấn công! Sát thương: ${damage}`;
             break;
 
-        case 'defend':
-            battleState.enemyDefensing = true;
-            logMessage = `🛡️ ${enemyName} phòng thủ!`;
-            damage = 0;
-            break;
+
 
         case 'skill':
             damage = calculateDamage(
@@ -5194,6 +5214,9 @@ function updateEnemyHPBar() {
 // End Battle
 function endBattle(isWin) {
     battleState.isActive = false;
+    
+    // Reset Exclusive Skill flag for next battle
+    gameState.character._exclusiveSkillUsedThisBattle = false;
 
     const battleLog = document.getElementById('battleLog');
     const currentQuest = gameState.quests.find(q => q.id === battleState.currentQuestId);

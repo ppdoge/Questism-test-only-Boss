@@ -1621,6 +1621,19 @@ body {
     transform: translateY(-1px);
 }
 
+.action-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background: linear-gradient(135deg, #7f8c8d, #95a5a6);
+    border-color: rgba(255, 255, 255, 0.1);
+    transform: none !important;
+}
+
+.action-btn:disabled:hover {
+    box-shadow: none;
+    transform: none;
+}
+
 .btn-primary {
     background: linear-gradient(135deg, #e74c3c, #c0392b);
 }
@@ -2055,7 +2068,7 @@ body {
 .quiz-challenge h3 {
     text-align: center;
     margin: 20px 0;
-    color: #333;
+    color: #fff;
     font-size: 1.3em;
 }
 
